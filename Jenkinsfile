@@ -7,18 +7,14 @@ pipeline {
 
     environment {
         // GLobal Vars
-        PIPELINES_NAMESPACE = "labs-ci-cd"
+        PROJECT_NAMESPACE = "summit-tekton"
         APP_NAME = "angular-fe"
+        NODE_ENV="test"
+        E2E_TEST_ROUTE = "oc get route/${APP_NAME} --template='{{.spec.host}}' -n ${PROJECT_NAMESPACE}".execute().text.minus("'").minus("'")
 
         JENKINS_TAG = "${JOB_NAME}.${BUILD_NUMBER}".replace("/", "-")
         JOB_NAME = "${JOB_NAME}".replace("/", "-")
 
-        GIT_SSL_NO_VERIFY = true
-        GIT_CREDENTIALS = credentials('labs-ci-cd-jenkins-git-password')
-        NEXUS_CREDS = credentials('labs-ci-cd-nexus-password')
-
-        GITLAB_DOMAIN = "gitlab-labs-ci-cd.apps.somedomain.com"
-        GITLAB_PROJECT = "labs"
         SONAR_SCANNER_HOME = tool "sonar-scanner-tool"
     }
 
@@ -29,63 +25,6 @@ pipeline {
     }
 
     stages {
-        stage("prepare environment for master deploy") {
-            agent {
-                node {
-                    label "master"
-                }
-            }
-            when {
-              expression { GIT_BRANCH ==~ /(.*master)/ }
-            }
-            steps {
-                script {
-                    // Arbitrary Groovy Script executions can do in script tags
-                    env.PROJECT_NAMESPACE = "labs-test"
-                    env.NODE_ENV = "test"
-                    env.E2E_TEST_ROUTE = "oc get route/${APP_NAME} --template='{{.spec.host}}' -n ${PROJECT_NAMESPACE}".execute().text.minus("'").minus("'")
-                }
-            }
-        }
-        stage("prepare environment for develop deploy") {
-            agent {
-                node {
-                    label "master"
-                }
-            }
-            when {
-              expression { GIT_BRANCH ==~ /(.*develop)/ }
-            }
-            steps {
-                script {
-                    // Arbitrary Groovy Script executions can do in script tags
-                    env.PROJECT_NAMESPACE = "labs-dev"
-                    env.NODE_ENV = "dev"
-                    env.E2E_TEST_ROUTE = "oc get route/${APP_NAME} --template='{{.spec.host}}' -n ${PROJECT_NAMESPACE}".execute().text.minus("'").minus("'")
-                }
-            }
-        }
-        stage("Apply cluster configs") {
-            agent {
-                node {
-                    label "jenkins-slave-ansible"
-                }
-            }
-            when {
-              expression { GIT_BRANCH ==~ /(.*master|.*develop)/ }
-            }
-            steps {
-                echo '### Apply cluster configs ###'
-                sh  '''
-                        printenv
-                    '''
-                sh  '''
-                        cd .openshift-applier
-                        ansible-galaxy install -r requirements.yml --roles-path=roles
-                        ansible-playbook apply.yml -e target=app -i inventory/
-                    '''
-            }
-        }
         stage("node-build") {
             agent {
                 node {
@@ -93,9 +32,6 @@ pipeline {
                 }
             }
             steps {
-                // git branch: 'develop',
-                //     credentialsId: 'jenkins-git-creds',
-                //     url: 'https://gitlab-labs-ci-cd.apps.somedomain.com/labs/angular-fe.git'
                 sh 'printenv'
 
                 echo '### Install deps ###'
@@ -152,40 +88,6 @@ pipeline {
                 sh 'npm run publish'
             }
             // Post can be used both on individual stages and for the entire build.
-            post {
-                always {
-                    archiveArtifacts "**"
-                    junit 'reports/unit/junit-report.xml'
-                    // publish html
-                    publishHTML target: [
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: false,
-                        keepAll: true,
-                        reportDir: 'reports/coverage/lcov-report',
-                        reportFiles: 'index.html',
-                        reportName: 'FE Code Coverage'
-                    ]
-                    junit 'reports/e2e/*.xml'
-                    publishHTML target: [
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: false,
-                        keepAll: true,
-                        reportDir: 'reports/e2e',
-                        reportFiles: 'chrome-*.html,firefox-*.html',
-                        reportName: 'E2E Test Reports'
-                    ]
-                    // Notify slack or some such
-                }
-                success {
-                    echo "Git tagging"
-                    sh'''
-                        git config --global user.email "jenkins@example.com"
-                        git config --global user.name "jenkins-ci"
-                        git tag -a ${JENKINS_TAG} -m "JENKINS automated commit"
-                        git push https://${GIT_CREDENTIALS_USR}:${GIT_CREDENTIALS_PSW}@${GITLAB_DOMAIN}/${GITLAB_PROJECT}/${APP_NAME}.git --tags
-                    '''
-                }
-            }
         }
 
         stage("node-bake") {
