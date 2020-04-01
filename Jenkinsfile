@@ -10,7 +10,6 @@ pipeline {
         PROJECT_NAMESPACE = "summit-tekton"
         APP_NAME = "angular-fe"
         NODE_ENV="test"
-        E2E_TEST_ROUTE = "oc get route/${APP_NAME} --template='{{.spec.host}}' -n ${PROJECT_NAMESPACE}".execute().text.minus("'").minus("'")
 
         JENKINS_TAG = "${JOB_NAME}.${BUILD_NUMBER}".replace("/", "-")
         JOB_NAME = "${JOB_NAME}".replace("/", "-")
@@ -144,16 +143,6 @@ pipeline {
                     waitTime: '',
                     waitUnit: 'sec'
             }
-            post {
-                success {
-                    build job: 'system-test', parameters: [[$class: 'StringParameterValue', name: 'PROJECT_NAMESPACE', value: "${PROJECT_NAMESPACE}" ],[$class: 'StringParameterValue', name: 'JENKINS_TAG', value: "${JENKINS_TAG}"]], wait: false
-                }
-            }
-        }
-    }
-    post {
-        always {
-            archiveArtifacts "**"
         }
     }
 }
