@@ -14,7 +14,7 @@ pipeline {
         JENKINS_TAG = "${JOB_NAME}.${BUILD_NUMBER}".replace("/", "-")
         JOB_NAME = "${JOB_NAME}".replace("/", "-")
 
-        SONAR_SCANNER_HOME = tool "sonar-scanner-tool"
+        //SONAR_SCANNER_HOME = tool "sonar-scanner-tool"
     }
 
     // The options directive is for configuration that applies to the whole job.
